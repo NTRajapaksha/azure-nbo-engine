@@ -216,7 +216,86 @@ pytest tests/test_api.py --api-url=https://your-function-app.azurewebsites.net
 
 ---
 
-## 📈 Future Improvements
+## 🛠️ Technical Challenges & Solutions
+
+During the development and deployment of the NBO Engine, I encountered several "last-mile" engineering challenges that are rarely covered in tutorials but critical for production systems. Below is a summary of how I resolved them to move from a local prototype to a production-grade cloud system.
+
+### 1. The "Ghost Deployment" Issue (Root Directory Mismatch)
+
+**Challenge**: Initial deployments to Azure Functions resulted in a "No HTTP triggers found" error, even though the code was pushed successfully.
+
+**Diagnostic**: Discovered that the Azure Function runtime was looking for the `host.json` and `function_app.py` at the root, while the project structure had them tucked inside a subfolder.
+
+**Solution**: Restructured the repository to ensure all configuration files remained at the top-level root, allowing the Azure worker indexing to correctly identify the API entry points.
+
+**Lesson Learned**: Azure Functions follows strict conventions for project structure. Always verify that `host.json`, `requirements.txt`, and `function_app.py` are at the deployment root.
+
+### 2. Transcontinental Latency & Cold Starts
+
+**Challenge**: Initial API response times were ~4.8 seconds. While acceptable for batch processing, this was non-viable for a real-time banking dashboard.
+
+**Optimization Strategy**:
+- **The Cache**: Implemented a Global Singleton Pattern in Python. Instead of downloading the prediction CSV from Azure Blob Storage on every request, the data is downloaded once and stored in the server's RAM.
+- **The Result**: Reduced execution latency from 4.8s to <150ms (96% improvement).
+- **Architecture Insight**: Recognized that the remaining ~700ms was purely geographical "Network Round-Trip Time" (RTT) between the South Asian client and the US-East data center.
+
+**Code Snippet**:
+```python
+# Global cache initialized once at function startup
+_predictions_cache = None
+
+def get_predictions():
+    global _predictions_cache
+    if _predictions_cache is None:
+        _predictions_cache = load_from_blob()  # One-time download
+    return _predictions_cache
+```
+
+**Future Optimization**: Deploy to Azure regions closer to end-users (e.g., Southeast Asia) to reduce RTT further.
+
+### 3. Environment Mismatch (WSL vs. Windows Deployment)
+
+**Challenge**: Developing in a Linux subsystem (WSL) while using the Windows VS Code extension caused the deployment tool to fail to find the Python interpreter.
+
+**Root Cause**: The Azure Functions VS Code extension runs on the Windows host but needs to access the Python environment inside WSL, creating a path resolution conflict.
+
+**Solution**: Installed a "Bridge Python" instance on the Windows host and configured App Execution Aliases to allow the Azure Extension to package the deployment while the core development remained in the `ds_lab` Conda environment.
+
+**Alternative Approach**: Use Azure CLI entirely from within WSL:
+```bash
+func azure functionapp publish nbo-api-lead-1126 --build remote
+```
+
+### 4. Storage Permissioning (RBAC vs. Access Keys)
+
+**Challenge**: The API initially threw a `BlobNotFound` error despite the file existing. This was due to the Azure Portal defaulting to "Microsoft Entra User Account" authentication, which restricted the developer's write access to the container.
+
+**Root Cause**: Azure Portal's authentication toggle was set to "Microsoft Entra ID" instead of "Access Key", causing permission mismatches between the developer account and the Function App's managed identity.
+
+**Solution**: Switched the authentication method to Storage Access Keys for the service-to-service connection, ensuring the Azure Function had a persistent and secure "Master Key" to fetch the prediction datasets.
+
+**Security Note**: For production systems, consider using Azure Managed Identity with proper RBAC roles instead of shared access keys for enhanced security.
+
+**Best Practice**:
+```python
+# Use environment variables for connection strings
+STORAGE_CONNECTION_STRING = os.getenv("AzureWebJobsStorage")
+blob_service_client = BlobServiceClient.from_connection_string(STORAGE_CONNECTION_STRING)
+```
+
+---
+
+## 💡 Key Takeaways
+
+These challenges taught me that **90% of production engineering is solving the last 10% of problems** that don't appear in tutorials:
+- Cloud platforms have hidden conventions that must be precisely followed
+- Performance optimization requires understanding the full request lifecycle
+- Development environment mismatches can derail deployment workflows
+- Cloud authentication models are complex and require careful configuration
+
+Each issue strengthened my debugging methodology and cloud architecture knowledge, transforming this from a demo project into a production-ready system.
+
+---
 
 ### Short-term
 - [ ] **Feedback Loop**: Implement POST `/feedback` endpoint to capture "Offer Accepted" events
@@ -255,8 +334,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 👤 Author
 
-**[Thathsara Rajapaksha]**
+**Thathsara Rajapaksha**
 - Role: Data Scientist & Cloud Engineer
+- Email: ntratoffical@gmail.com
 
 ---
 
@@ -267,6 +347,13 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [Add any other acknowledgments]
 
 ---
+
+## 📞 Support
+
+For questions or issues:
+- Open an issue on GitHub
+- Email: support@yourproject.com
+- Documentation: [Link to detailed docs]
 
 ---
 
