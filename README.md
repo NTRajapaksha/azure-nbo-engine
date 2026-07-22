@@ -171,6 +171,37 @@ If you want to retrain the model with your own data:
 
 ---
 
+## 🔍 Codebase Walkthrough: What Happens in Each File
+
+### 1. The Machine Learning Engine
+**`data_engineering/nbo_spark_training.ipynb`**
+- **Purpose:** The heavy-lifting data science laboratory where the recommendation model is trained.
+- **What it does:** 
+  - Uses **PySpark** to load massive datasets (transactions, user demographics).
+  - Prepares an interaction matrix.
+  - Trains an **ALS (Alternating Least Squares)** Collaborative Filtering model using Spark MLlib, distributed across a Databricks cluster.
+  - Generates top recommendations for every user and exports these predictions as CSV/Parquet files to **Azure Blob Storage**.
+
+### 2. The Cloud API (Backend)
+**`backend/function_app.py`**
+- **Purpose:** The serverless inference layer that connects the trained model to the real world.
+- **What it does:** 
+  - This is an **Azure Function** (serverless API).
+  - Instead of running a heavy machine learning model in real-time, it acts as an ultra-fast lookup service.
+  - It maintains an **in-memory cache** by downloading the pre-computed recommendations from Azure Blob Storage on startup.
+  - When an HTTP GET request arrives, it instantly returns the Next Best Offer as a JSON response, achieving sub-100ms latency.
+
+### 3. The User Interface (Frontend)
+**`dashboard.py`**
+- **Purpose:** The front-end application used by banking relationship managers.
+- **What it does:** 
+  - Built using **Streamlit**.
+  - It allows a banking agent to look up a customer profile.
+  - Behind the scenes, it sends an HTTP request to the Azure Function API.
+  - It displays the customer's CRM profile alongside the AI-recommended "Next Best Offer" in a clean, interactive web interface.
+
+---
+
 ## 📊 API Documentation
 
 ### GET `/api/recommend`
@@ -344,16 +375,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - Azure Databricks team for excellent Spark MLlib documentation
 - The open-source community for Streamlit and supporting libraries
-- [Add any other acknowledgments]
 
----
-
-## 📞 Support
-
-For questions or issues:
-- Open an issue on GitHub
-- Email: support@yourproject.com
-- Documentation: [Link to detailed docs]
 
 ---
 
